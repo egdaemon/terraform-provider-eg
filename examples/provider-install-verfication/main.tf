@@ -1,8 +1,6 @@
 terraform {
   required_providers {
-    eg = {
-      source = "hashicorp.com/edu/eg"
-    }
+    eg = "hashicorp.com/edu/eg"
   }
 }
 
