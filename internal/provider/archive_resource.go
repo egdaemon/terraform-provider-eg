@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -23,7 +22,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // reference resource: https://github.com/hashicorp/terraform-provider-local/blob/main/internal/provider/resource_local_file.go
@@ -117,7 +115,7 @@ func (r *ArchiveResource) generate(ctx context.Context, ts time.Time, dst *os.Fi
 		digest = sha256.New()
 	)
 
-	b64 := base64.NewEncoder(base64.RawURLEncoding, dst)
+	b64 := base64.NewEncoder(base64.StdEncoding, dst)
 	gw := gzip.NewWriter(b64)
 	defer gw.Close()
 	tw := tar.NewWriter(gw)
@@ -153,8 +151,7 @@ func (r *ArchiveResource) generate(ctx context.Context, ts time.Time, dst *os.Fi
 	if err != nil {
 		return err
 	}
-
-	tflog.Info(ctx, fmt.Sprintf("WAKA %d, %s", len(encodedstr), encodedstr))
+	// tflog.Info(ctx, fmt.Sprintf("debug encoded archive %s", encodedstr))
 	data.ArchiveB64 = basetypes.NewStringValue(encodedstr)
 
 	return nil
