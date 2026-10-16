@@ -22,6 +22,8 @@ import (
 // can be customized.
 //go:generate go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs generate -provider-name registry.terraform.io/egdaemon/eg
 
+//go:generate protoc --proto_path=.proto --go_opt=Mci.repository.schedule.proto=github.com/egdaemon/egt/internal/repository --go_opt=paths=source_relative --go_out=internal/repository ci.repository.schedule.proto
+
 var (
 	// these will be set by the goreleaser configuration
 	// to appropriate values for the compiled binary.
