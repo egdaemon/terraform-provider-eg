@@ -2,12 +2,16 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/egdaemon/eg/schedules"
 	"github.com/egdaemon/fron"
+	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -21,36 +25,39 @@ import (
 
 // ScheduledWorkloadResourceModel describes the resource data model.
 type ScheduledWorkloadResourceModel struct {
-	ID          types.String   `tfsdk:"id"`
-	Repository  types.String   `tfsdk:"repository"`
-	Workload    types.String   `tfsdk:"workload"`
-	Cron        types.String   `tfsdk:"cron"`
-	Description types.String   `tfsdk:"description"`
-	Timeout     types.String   `tfsdk:"timeout"`
-	CPU         types.Int64    `tfsdk:"cpu"`
-	Memory      types.String   `tfsdk:"memory"`
-	Vram        types.String   `tfsdk:"vram"`
-	Arch        types.String   `tfsdk:"arch"`
-	OS          types.String   `tfsdk:"os"`
-	Labels      []types.String `tfsdk:"labels"`
-	AccountID   types.String   `tfsdk:"account_id"`
-	CreatedAt   types.String   `tfsdk:"created_at"`
-	UpdatedAt   types.String   `tfsdk:"updated_at"`
-	LastrunAt   types.String   `tfsdk:"lastrun_at"`
-	NextrunAt   types.String   `tfsdk:"nextrun_at"`
+	ID          types.String         `tfsdk:"id"`
+	Repository  types.String         `tfsdk:"repository"`
+	Workload    types.String         `tfsdk:"workload"`
+	Schedule    types.String         `tfsdk:"schedule"`
+	Description types.String         `tfsdk:"description"`
+	Timeout     timetypes.GoDuration `tfsdk:"timeout"`
+	CPU         types.Int64          `tfsdk:"cpu"`
+	Memory      types.String         `tfsdk:"memory"`
+	Vram        types.String         `tfsdk:"vram"`
+	Arch        types.String         `tfsdk:"arch"`
+	OS          types.String         `tfsdk:"os"`
+	Labels      []types.String       `tfsdk:"labels"`
+	SecretURIs  []types.String       `tfsdk:"secret_uris"`
+	AccountID   types.String         `tfsdk:"account_id"`
+	CreatedAt   types.String         `tfsdk:"created_at"`
+	UpdatedAt   types.String         `tfsdk:"updated_at"`
+	LastrunAt   types.String         `tfsdk:"lastrun_at"`
+	NextrunAt   types.String         `tfsdk:"nextrun_at"`
 }
 
 // schedule converts the model into the control plane's representation.
 func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err error) {
 	var (
-		ttl    time.Duration
-		memory uint64
-		vram   uint64
-		labels = make([]string, 0, len(t.Labels))
+		ttl     time.Duration
+		diags   diag.Diagnostics
+		memory  uint64
+		vram    uint64
+		labels  = make([]string, 0, len(t.Labels))
+		secrets = make([]string, 0, len(t.SecretURIs))
 	)
 
-	if ttl, err = time.ParseDuration(t.Timeout.ValueString()); err != nil {
-		return nil, err
+	if ttl, diags = t.Timeout.ValueGoDuration(); diags.HasError() {
+		return nil, errors.New(diags.Errors()[0].Detail())
 	}
 
 	if memory, err = bytesof(t.Memory); err != nil {
@@ -65,6 +72,10 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err 
 		labels = append(labels, l.ValueString())
 	}
 
+	for _, u := range t.SecretURIs {
+		secrets = append(secrets, u.ValueString())
+	}
+
 	return &schedules.Schedule{
 		Id:          t.ID.ValueString(),
 		AccountId:   t.AccountID.ValueString(),
@@ -72,7 +83,7 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err 
 		LastrunAt:   t.LastrunAt.ValueString(),
 		VcsUri:      t.Repository.ValueString(),
 		Entry:       t.Workload.ValueString(),
-		Cron:        t.Cron.ValueString(),
+		Cron:        t.Schedule.ValueString(),
 		Description: t.Description.ValueString(),
 		Ttl:         uint64(ttl.Milliseconds()),
 		Cores:       uint64(t.CPU.ValueInt64()),
@@ -81,6 +92,7 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err 
 		Arch:        t.Arch.ValueString(),
 		Os:          t.OS.ValueString(),
 		Labels:      labels,
+		SecretUris:  secrets,
 	}, nil
 }
 
@@ -95,24 +107,17 @@ func (t *ScheduledWorkloadResourceModel) refresh(s *schedules.Schedule) {
 	t.NextrunAt = types.StringValue(s.NextrunAt)
 	t.Repository = types.StringValue(s.VcsUri)
 	t.Workload = types.StringValue(s.Entry)
-	t.Cron = types.StringValue(s.Cron)
+	t.Schedule = types.StringValue(s.Cron)
 	t.Description = types.StringValue(s.Description)
-	t.Timeout = durationof(t.Timeout, time.Duration(s.Ttl)*time.Millisecond)
+	t.Timeout = timetypes.NewGoDurationValue(time.Duration(s.Ttl) * time.Millisecond)
 	t.CPU = types.Int64Value(int64(s.Cores))
 	t.Memory = sizeof(t.Memory, s.Memory)
 	t.Vram = sizeof(t.Vram, s.Vram)
 	t.Arch = types.StringValue(s.Arch)
 	t.OS = types.StringValue(s.Os)
 
-	// an omitted labels attribute stays null when the control plane reports no labels.
-	if len(s.Labels) == 0 && t.Labels == nil {
-		return
-	}
-
-	t.Labels = make([]types.String, 0, len(s.Labels))
-	for _, l := range s.Labels {
-		t.Labels = append(t.Labels, types.StringValue(l))
-	}
+	t.Labels = stringlist(t.Labels, s.Labels)
+	t.SecretURIs = stringlist(t.SecretURIs, s.SecretUris)
 }
 
 var (
@@ -152,11 +157,11 @@ func (r *ScheduledWorkloadResource) Schema(ctx context.Context, req resource.Sch
 				MarkdownDescription: "workload module to run within the repository, e.g. `tests/stress`",
 				Required:            true,
 			},
-			"cron": schema.StringAttribute{
+			"schedule": schema.StringAttribute{
 				MarkdownDescription: "[fron](https://github.com/egdaemon/fron) schedule to run the workload on, e.g. `1d`, `6h`, `1d @ on weekdays`. pins are ignored, each schedule runs at a stable slot within its frequency.",
 				Required:            true,
 				Validators: []validator.String{
-					parses{description: "invalid fron schedule", parse: cronparse},
+					parses{description: "invalid fron schedule", parse: scheduleparse},
 				},
 			},
 			"description": schema.StringAttribute{
@@ -168,13 +173,11 @@ func (r *ScheduledWorkloadResource) Schema(ctx context.Context, req resource.Sch
 				},
 			},
 			"timeout": schema.StringAttribute{
-				MarkdownDescription: "maximum runtime of the workload, defaults to `1h`",
+				MarkdownDescription: "maximum runtime of the workload as a duration like `30m` or `1h30m`, defaults to `1h`",
+				CustomType:          timetypes.GoDurationType{},
 				Optional:            true,
 				Computed:            true,
 				Default:             stringdefault.StaticString("1h"),
-				Validators: []validator.String{
-					parses{description: "invalid duration", parse: durationparse},
-				},
 			},
 			"cpu": schema.Int64Attribute{
 				MarkdownDescription: "number of vCPU to make available",
@@ -224,6 +227,11 @@ func (r *ScheduledWorkloadResource) Schema(ctx context.Context, req resource.Sch
 			},
 			"labels": schema.ListAttribute{
 				MarkdownDescription: "labels a runner must have to run the workload",
+				ElementType:         types.StringType,
+				Optional:            true,
+			},
+			"secret_uris": schema.ListAttribute{
+				MarkdownDescription: "references to the secrets made available to the workload, e.g. `gcpsm://project-id/secret-name`. these are references, the secrets are resolved by the runner",
 				ElementType:         types.StringType,
 				Optional:            true,
 			},
@@ -277,6 +285,7 @@ func (r *ScheduledWorkloadResource) Create(ctx context.Context, req resource.Cre
 		data    ScheduledWorkloadResourceModel
 		sched   *schedules.Schedule
 		created *schedules.Schedule
+		c       *http.Client
 		err     error
 	)
 
@@ -285,12 +294,17 @@ func (r *ScheduledWorkloadResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
+	if c, err = r.data.client(); err != nil {
+		resp.Diagnostics.AddError("unable to authorize", err.Error())
+		return
+	}
+
 	if sched, err = data.schedule(); err != nil {
 		resp.Diagnostics.AddError("invalid scheduled workload", err.Error())
 		return
 	}
 
-	if created, err = r.data.schedules.Create(ctx, sched); err != nil {
+	if created, err = schedules.Create(ctx, c, sched); err != nil {
 		resp.Diagnostics.AddError("unable to create scheduled workload", err.Error())
 		return
 	}
@@ -303,6 +317,7 @@ func (r *ScheduledWorkloadResource) Read(ctx context.Context, req resource.ReadR
 	var (
 		data  ScheduledWorkloadResourceModel
 		found *schedules.Schedule
+		c     *http.Client
 		err   error
 	)
 
@@ -311,7 +326,12 @@ func (r *ScheduledWorkloadResource) Read(ctx context.Context, req resource.ReadR
 		return
 	}
 
-	if found, err = r.data.schedules.Find(ctx, data.Repository.ValueString(), data.ID.ValueString()); err != nil {
+	if c, err = r.data.client(); err != nil {
+		resp.Diagnostics.AddError("unable to authorize", err.Error())
+		return
+	}
+
+	if found, err = schedules.Find(ctx, c, data.Repository.ValueString(), data.ID.ValueString()); err != nil {
 		resp.Diagnostics.AddError("unable to read scheduled workload", err.Error())
 		return
 	}
@@ -330,6 +350,7 @@ func (r *ScheduledWorkloadResource) Update(ctx context.Context, req resource.Upd
 		data    ScheduledWorkloadResourceModel
 		sched   *schedules.Schedule
 		updated *schedules.Schedule
+		c       *http.Client
 		err     error
 	)
 
@@ -338,12 +359,17 @@ func (r *ScheduledWorkloadResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
+	if c, err = r.data.client(); err != nil {
+		resp.Diagnostics.AddError("unable to authorize", err.Error())
+		return
+	}
+
 	if sched, err = data.schedule(); err != nil {
 		resp.Diagnostics.AddError("invalid scheduled workload", err.Error())
 		return
 	}
 
-	if updated, err = r.data.schedules.Update(ctx, sched.Id, sched); err != nil {
+	if updated, err = schedules.Update(ctx, c, sched.Id, sched); err != nil {
 		resp.Diagnostics.AddError("unable to update scheduled workload", err.Error())
 		return
 	}
@@ -355,6 +381,7 @@ func (r *ScheduledWorkloadResource) Update(ctx context.Context, req resource.Upd
 func (r *ScheduledWorkloadResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
 	var (
 		data ScheduledWorkloadResourceModel
+		c    *http.Client
 		err  error
 	)
 
@@ -363,7 +390,12 @@ func (r *ScheduledWorkloadResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	if err = r.data.schedules.Remove(ctx, data.ID.ValueString()); err != nil {
+	if c, err = r.data.client(); err != nil {
+		resp.Diagnostics.AddError("unable to authorize", err.Error())
+		return
+	}
+
+	if err = schedules.Remove(ctx, c, data.ID.ValueString()); err != nil {
 		resp.Diagnostics.AddError("unable to delete scheduled workload", err.Error())
 	}
 }
@@ -372,14 +404,24 @@ func (r *ScheduledWorkloadResource) ImportState(ctx context.Context, req resourc
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }
 
-// cronparse validates the schedule with the options the control plane computes the next run with.
-func cronparse(s string) (err error) {
-	_, err = fron.NextTick(time.Now(), s, fron.Options().IgnoreSeed().IgnorePin().InTz(time.UTC)...)
-	return err
+// stringlist the control plane's values as a list attribute. an omitted attribute stays null when the control
+// plane reports no values.
+func stringlist(prior []types.String, values []string) []types.String {
+	if len(values) == 0 && prior == nil {
+		return nil
+	}
+
+	l := make([]types.String, 0, len(values))
+	for _, v := range values {
+		l = append(l, types.StringValue(v))
+	}
+
+	return l
 }
 
-func durationparse(s string) (err error) {
-	_, err = time.ParseDuration(s)
+// scheduleparse validates the schedule with the options the control plane computes the next run with.
+func scheduleparse(s string) (err error) {
+	_, err = fron.NextTick(time.Now(), s, fron.Options().IgnoreSeed().IgnorePin().InTz(time.UTC)...)
 	return err
 }
 
@@ -409,20 +451,6 @@ func sizeof(prior types.String, n uint64) types.String {
 	}
 
 	return types.StringValue(humanize.IBytes(n))
-}
-
-// durationof preserves the prior representation of a duration when it matches the duration the control plane reports.
-func durationof(prior types.String, d time.Duration) types.String {
-	var (
-		v   time.Duration
-		err error
-	)
-
-	if v, err = time.ParseDuration(prior.ValueString()); err == nil && v == d {
-		return prior
-	}
-
-	return types.StringValue(d.String())
 }
 
 // parses validates a string attribute by attempting to parse it.
