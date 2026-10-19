@@ -184,7 +184,7 @@ resource "eg_repository_scheduled_workload" "test" {
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "labels.0", "gpu"),
 						func(*terraform.State) error {
 							require.Equal(t, "tests/stress", api.get("s1").GetEntry())
-							require.Equal(t, uint64(time.Hour.Milliseconds()), api.get("s1").GetTtl())
+							require.Equal(t, uint64(time.Hour), api.get("s1").GetTtl())
 							require.Equal(t, uint64(1000000000), api.get("s1").GetMemory())
 							return nil
 						},
@@ -201,7 +201,7 @@ resource "eg_repository_scheduled_workload" "test" {
 							// the api resets omitted fields, an update must send the full record.
 							require.Equal(t, "a1", api.updated.GetAccountId())
 							require.Equal(t, "amd64", api.updated.GetArch())
-							require.Equal(t, uint64(2*time.Hour.Milliseconds()), api.updated.GetTtl())
+							require.Equal(t, uint64(2*time.Hour), api.updated.GetTtl())
 							return nil
 						},
 					),
@@ -313,7 +313,7 @@ resource "eg_repository_scheduled_workload" "test" {
 					Check: resource.ComposeAggregateTestCheckFunc(
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "timeout", "90m"),
 						func(*terraform.State) error {
-							require.Equal(t, uint64(90*time.Minute.Milliseconds()), api.get("s1").GetTtl())
+							require.Equal(t, uint64(90*time.Minute), api.get("s1").GetTtl())
 							return nil
 						},
 					),
@@ -323,7 +323,7 @@ resource "eg_repository_scheduled_workload" "test" {
 					Check: resource.ComposeAggregateTestCheckFunc(
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "timeout", "2h"),
 						func(*terraform.State) error {
-							require.Equal(t, uint64(2*time.Hour.Milliseconds()), api.get("s1").GetTtl())
+							require.Equal(t, uint64(2*time.Hour), api.get("s1").GetTtl())
 							return nil
 						},
 					),
@@ -398,7 +398,7 @@ func TestScheduledWorkloadResourceModelSchedule(t *testing.T) {
 			Labels:  []types.String{types.StringValue("gpu"), types.StringValue("fast")},
 		}).schedule()
 		require.NoError(t, err)
-		require.Equal(t, uint64(90*time.Minute.Milliseconds()), s.Ttl)
+		require.Equal(t, uint64(90*time.Minute), s.Ttl)
 		require.Equal(t, uint64(2<<30), s.Memory)
 		require.Equal(t, uint64(8000000000), s.Vram)
 		require.Equal(t, uint64(4), s.Cores)
@@ -457,7 +457,7 @@ func TestScheduledWorkloadResourceModelRefresh(t *testing.T) {
 		m := ScheduledWorkloadResourceModel{
 			Memory: types.StringValue("1g"),
 		}
-		m.refresh(&schedules.Schedule{Id: "s1", Ttl: uint64(time.Hour.Milliseconds()), Memory: 1000000000})
+		m.refresh(&schedules.Schedule{Id: "s1", Ttl: uint64(time.Hour), Memory: 1000000000})
 		require.Equal(t, "s1", m.ID.ValueString())
 		require.Equal(t, "1h0m0s", m.Timeout.ValueString())
 		require.Equal(t, "1g", m.Memory.ValueString())
@@ -467,7 +467,7 @@ func TestScheduledWorkloadResourceModelRefresh(t *testing.T) {
 		m := ScheduledWorkloadResourceModel{
 			Memory: types.StringValue("1g"),
 		}
-		m.refresh(&schedules.Schedule{Ttl: uint64(2 * time.Hour.Milliseconds()), Memory: 2 << 30})
+		m.refresh(&schedules.Schedule{Ttl: uint64(2 * time.Hour), Memory: 2 << 30})
 		require.Equal(t, "2h0m0s", m.Timeout.ValueString())
 		require.Equal(t, "2.0 GiB", m.Memory.ValueString())
 	})

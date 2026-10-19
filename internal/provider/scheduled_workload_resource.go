@@ -80,7 +80,7 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err 
 		Entry:       t.Workload.ValueString(),
 		Cron:        t.Schedule.ValueString(),
 		Description: t.Description.ValueString(),
-		Ttl:         uint64(ttl.Milliseconds()),
+		Ttl:         uint64(ttl),
 		Cores:       uint64(t.CPU.ValueInt64()),
 		Memory:      memory,
 		Vram:        vram,
@@ -101,7 +101,7 @@ func (t *ScheduledWorkloadResourceModel) refresh(s *schedules.Schedule) {
 	t.Workload = types.StringValue(s.Entry)
 	t.Schedule = types.StringValue(s.Cron)
 	t.Description = types.StringValue(s.Description)
-	t.Timeout = timetypes.NewGoDurationValue(time.Duration(s.Ttl) * time.Millisecond)
+	t.Timeout = timetypes.NewGoDurationValue(time.Duration(s.Ttl))
 	t.CPU = types.Int64Value(int64(s.Cores))
 	t.Memory = sizeof(t.Memory, s.Memory)
 	t.Vram = sizeof(t.Vram, s.Vram)
