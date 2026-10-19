@@ -145,5 +145,6 @@ func (p *egt) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewTarResource,
 		NewGCPIdentityFederationResource,
+		NewScheduledWorkloadResource,
 	}
 }

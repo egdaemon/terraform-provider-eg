@@ -3,13 +3,17 @@ module github.com/egdaemon/egt
 go 1.26.3
 
 require (
-	github.com/egdaemon/eg v0.0.0-20261019143044-b80a89199534
+	github.com/dustin/go-humanize v1.1.0
+	github.com/egdaemon/eg v0.0.0-20261019194830-76fe1be1f305
+	github.com/egdaemon/fron v0.0.0-20261016153721-ecdbb5b2656e
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
+	github.com/hashicorp/terraform-plugin-framework-timetypes v0.5.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-log v0.10.0
 	github.com/hashicorp/terraform-plugin-testing v1.16.0
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/crypto v0.57.0
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -19,7 +23,6 @@ require (
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/cloudflare/circl v1.6.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/fgprof v0.9.5 // indirect
 	github.com/gofrs/uuid/v5 v5.5.1 // indirect
@@ -84,6 +87,5 @@ require (
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/grpc v1.81.1 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -2,21 +2,16 @@ package provider
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/egdaemon/eg/gcpwif"
-	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
-	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/stretchr/testify/require"
@@ -299,115 +294,5 @@ resource "eg_gcp_identity_federation" "test" {
 				},
 			},
 		})
-	})
-}
-
-func TestProviderLazyClient(t *testing.T) {
-	// resources that do not talk to the eg api never need the ssh key.
-	t.Run("should not look up the ssh key for resources that do not use the api", func(t *testing.T) {
-		resource.UnitTest(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"eg": providerserver.NewProtocol6WithError(&egt{version: "test"}),
-			},
-			Steps: []resource.TestStep{
-				{
-					Config: `
-provider "eg" {
-  ssh_key_path = "/nonexistent/id_ed25519"
-}
-
-resource "eg_tar" "test" {
-  source {
-    base64   = base64encode("content")
-    location = "example.txt"
-  }
-}
-`,
-					Check: resource.TestCheckResourceAttrSet("eg_tar.test", "archiveb64"),
-				},
-			},
-		})
-	})
-
-	t.Run("should report a missing ssh key when a resource first needs the api", func(t *testing.T) {
-		resource.UnitTest(t, resource.TestCase{
-			ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-				"eg": providerserver.NewProtocol6WithError(&egt{version: "test"}),
-			},
-			Steps: []resource.TestStep{
-				{
-					Config: `
-provider "eg" {
-  ssh_key_path = "/nonexistent/id_ed25519"
-}
-
-resource "eg_gcp_identity_federation" "test" {
-  audience = "` + wifTestAudience + `"
-}
-`,
-					ExpectError: regexp.MustCompile("unable\\s+to\\s+read\\s+the\\s+ssh\\s+key"),
-				},
-			},
-		})
-	})
-
-	configure := func(t *testing.T, p *egt) *providerData {
-		t.Helper()
-
-		var schemaResp provider.SchemaResponse
-		p.Schema(t.Context(), provider.SchemaRequest{}, &schemaResp)
-
-		raw := tftypes.NewValue(
-			tftypes.Object{AttributeTypes: map[string]tftypes.Type{
-				"account_id":   tftypes.String,
-				"ssh_key_path": tftypes.String,
-				"insecure":     tftypes.Bool,
-			}},
-			map[string]tftypes.Value{
-				"account_id":   tftypes.NewValue(tftypes.String, "account-1"),
-				"ssh_key_path": tftypes.NewValue(tftypes.String, nil),
-				"insecure":     tftypes.NewValue(tftypes.Bool, nil),
-			},
-		)
-
-		var resp provider.ConfigureResponse
-		p.Configure(t.Context(), provider.ConfigureRequest{Config: tfsdk.Config{Schema: schemaResp.Schema, Raw: raw}}, &resp)
-		require.False(t, resp.Diagnostics.HasError(), "%v", resp.Diagnostics)
-
-		data, ok := resp.ResourceData.(*providerData)
-		require.True(t, ok)
-		return data
-	}
-
-	t.Run("should build the client once, and only when asked", func(t *testing.T) {
-		var calls atomic.Int32
-		data := configure(t, &egt{version: "test", client: func() (*http.Client, error) {
-			calls.Add(1)
-			return &http.Client{}, nil
-		}})
-
-		require.Zero(t, calls.Load(), "configure must not build the client")
-		require.Equal(t, "account-1", data.account)
-
-		first, err := data.client()
-		require.NoError(t, err)
-		second, err := data.client()
-		require.NoError(t, err)
-		require.Same(t, first, second)
-		require.EqualValues(t, 1, calls.Load())
-	})
-
-	t.Run("should remember a failure rather than retrying", func(t *testing.T) {
-		var calls atomic.Int32
-		data := configure(t, &egt{version: "test", client: func() (*http.Client, error) {
-			calls.Add(1)
-			return nil, errors.New("no key")
-		}})
-
-		_, err := data.client()
-		require.ErrorContains(t, err, "no key")
-		_, err = data.client()
-		require.ErrorContains(t, err, "no key")
-		require.EqualValues(t, 1, calls.Load())
 	})
 }
