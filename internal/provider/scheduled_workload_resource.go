@@ -2,10 +2,11 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/egdaemon/egt/internal/repository"
+	"github.com/egdaemon/eg/schedules"
 	"github.com/egdaemon/fron"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -40,7 +41,7 @@ type ScheduledWorkloadResourceModel struct {
 }
 
 // schedule converts the model into the control plane's representation.
-func (t *ScheduledWorkloadResourceModel) schedule() (_ *repository.Schedule, err error) {
+func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err error) {
 	var (
 		ttl    time.Duration
 		memory uint64
@@ -64,7 +65,7 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *repository.Schedule, err
 		labels = append(labels, l.ValueString())
 	}
 
-	return &repository.Schedule{
+	return &schedules.Schedule{
 		Id:          t.ID.ValueString(),
 		AccountId:   t.AccountID.ValueString(),
 		CreatedAt:   t.CreatedAt.ValueString(),
@@ -85,7 +86,7 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *repository.Schedule, err
 
 // refresh updates the model from the control plane's representation, preserving the configured
 // representation of durations and sizes when they are equivalent.
-func (t *ScheduledWorkloadResourceModel) refresh(s *repository.Schedule) {
+func (t *ScheduledWorkloadResourceModel) refresh(s *schedules.Schedule) {
 	t.ID = types.StringValue(s.Id)
 	t.AccountID = types.StringValue(s.AccountId)
 	t.CreatedAt = types.StringValue(s.CreatedAt)
@@ -114,13 +115,19 @@ func (t *ScheduledWorkloadResourceModel) refresh(s *repository.Schedule) {
 	}
 }
 
+var (
+	_ resource.Resource                = &ScheduledWorkloadResource{}
+	_ resource.ResourceWithConfigure   = &ScheduledWorkloadResource{}
+	_ resource.ResourceWithImportState = &ScheduledWorkloadResource{}
+)
+
 func NewScheduledWorkloadResource() resource.Resource {
 	return &ScheduledWorkloadResource{}
 }
 
 // ScheduledWorkloadResource defines the resource implementation for a workload the control plane runs on a schedule.
 type ScheduledWorkloadResource struct {
-	client *repository.ScheduleClient
+	data *providerData
 }
 
 func (r *ScheduledWorkloadResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -251,19 +258,25 @@ func (r *ScheduledWorkloadResource) Schema(ctx context.Context, req resource.Sch
 }
 
 func (r *ScheduledWorkloadResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
-	// Prevent panic if the provider has not been configured.
+	var (
+		ok bool
+	)
+
+	// nil while the provider is validated.
 	if req.ProviderData == nil {
 		return
 	}
 
-	r.client = req.ProviderData.(*repository.ScheduleClient)
+	if r.data, ok = req.ProviderData.(*providerData); !ok {
+		resp.Diagnostics.AddError("unexpected provider data", fmt.Sprintf("expected *providerData, got %T", req.ProviderData))
+	}
 }
 
 func (r *ScheduledWorkloadResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var (
 		data    ScheduledWorkloadResourceModel
-		sched   *repository.Schedule
-		created *repository.ScheduleCreateResponse
+		sched   *schedules.Schedule
+		created *schedules.Schedule
 		err     error
 	)
 
@@ -277,19 +290,19 @@ func (r *ScheduledWorkloadResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
-	if created, err = r.client.Create(ctx, &repository.ScheduleCreateRequest{Schedule: sched}); err != nil {
+	if created, err = r.data.schedules.Create(ctx, sched); err != nil {
 		resp.Diagnostics.AddError("unable to create scheduled workload", err.Error())
 		return
 	}
 
-	data.refresh(created.Schedule)
+	data.refresh(created)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *ScheduledWorkloadResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
 	var (
 		data  ScheduledWorkloadResourceModel
-		found *repository.Schedule
+		found *schedules.Schedule
 		err   error
 	)
 
@@ -298,7 +311,7 @@ func (r *ScheduledWorkloadResource) Read(ctx context.Context, req resource.ReadR
 		return
 	}
 
-	if found, err = r.client.Find(ctx, data.Repository.ValueString(), data.ID.ValueString()); err != nil {
+	if found, err = r.data.schedules.Find(ctx, data.Repository.ValueString(), data.ID.ValueString()); err != nil {
 		resp.Diagnostics.AddError("unable to read scheduled workload", err.Error())
 		return
 	}
@@ -315,8 +328,8 @@ func (r *ScheduledWorkloadResource) Read(ctx context.Context, req resource.ReadR
 func (r *ScheduledWorkloadResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var (
 		data    ScheduledWorkloadResourceModel
-		sched   *repository.Schedule
-		updated *repository.ScheduleUpdateResponse
+		sched   *schedules.Schedule
+		updated *schedules.Schedule
 		err     error
 	)
 
@@ -330,12 +343,12 @@ func (r *ScheduledWorkloadResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
-	if updated, err = r.client.Update(ctx, sched.Id, &repository.ScheduleUpdateRequest{Schedule: sched}); err != nil {
+	if updated, err = r.data.schedules.Update(ctx, sched.Id, sched); err != nil {
 		resp.Diagnostics.AddError("unable to update scheduled workload", err.Error())
 		return
 	}
 
-	data.refresh(updated.Schedule)
+	data.refresh(updated)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -350,9 +363,8 @@ func (r *ScheduledWorkloadResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	if _, err = r.client.Destroy(ctx, data.ID.ValueString()); err != nil {
+	if err = r.data.schedules.Remove(ctx, data.ID.ValueString()); err != nil {
 		resp.Diagnostics.AddError("unable to delete scheduled workload", err.Error())
-		return
 	}
 }
 

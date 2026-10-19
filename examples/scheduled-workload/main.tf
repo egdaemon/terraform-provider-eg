@@ -1,8 +1,16 @@
-provider "eg" {
-  # account_id   = "..."           # defaults to EG_ACCOUNT
-  # ssh_key_path = "~/.ssh/eg"     # defaults to the key the eg cli uses
+terraform {
+  required_providers {
+    eg = {
+      source = "egdaemon/eg"
+    }
+  }
 }
 
+provider "eg" {
+  # account_id = "00000000-0000-0000-0000-000000000000"
+}
+
+# run the repository's tests/stress workload every weekday.
 resource "eg_repository_scheduled_workload" "default" {
   repository = "git@github.com:egdaemon/eg.git"
   entry      = "tests/stress"
