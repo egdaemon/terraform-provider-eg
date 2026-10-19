@@ -182,7 +182,6 @@ resource "eg_repository_scheduled_workload" "test" {
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "arch", "amd64"),
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "labels.#", "1"),
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "labels.0", "gpu"),
-						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "nextrun_at", "2026-10-17T00:00:00Z"),
 						func(*terraform.State) error {
 							require.Equal(t, "tests/stress", api.get("s1").GetEntry())
 							require.Equal(t, uint64(time.Hour.Milliseconds()), api.get("s1").GetTtl())
@@ -198,10 +197,8 @@ resource "eg_repository_scheduled_workload" "test" {
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "schedule", "6h"),
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "timeout", "2h"),
 						resource.TestCheckNoResourceAttr("eg_repository_scheduled_workload.test", "labels"),
-						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "nextrun_at", "2026-10-16T18:00:00Z"),
 						func(*terraform.State) error {
-							// the api computes the next run from lastrun_at and resets omitted fields, an update must send the full record.
-							require.Equal(t, "2026-10-16T00:00:00Z", api.updated.GetLastrunAt())
+							// the api resets omitted fields, an update must send the full record.
 							require.Equal(t, "a1", api.updated.GetAccountId())
 							require.Equal(t, "amd64", api.updated.GetArch())
 							require.Equal(t, uint64(2*time.Hour.Milliseconds()), api.updated.GetTtl())
@@ -430,19 +427,17 @@ func TestScheduledWorkloadResourceModelSchedule(t *testing.T) {
 		require.Zero(t, s.Cores)
 	})
 
-	t.Run("should carry the identity and lastrun_at of an existing schedule", func(t *testing.T) {
+	t.Run("should carry the identity of an existing schedule", func(t *testing.T) {
 		s, err := (&ScheduledWorkloadResourceModel{
 			ID:        types.StringValue("s1"),
 			AccountID: types.StringValue("a1"),
 			CreatedAt: types.StringValue("2026-10-15T00:00:00Z"),
-			LastrunAt: types.StringValue("2026-10-16T00:00:00Z"),
 			Timeout:   timetypes.NewGoDurationValueFromStringMust("1h"),
 		}).schedule()
 		require.NoError(t, err)
 		require.Equal(t, "s1", s.Id)
 		require.Equal(t, "a1", s.AccountId)
 		require.Equal(t, "2026-10-15T00:00:00Z", s.CreatedAt)
-		require.Equal(t, "2026-10-16T00:00:00Z", s.LastrunAt)
 	})
 
 	t.Run("should reject an invalid timeout", func(t *testing.T) {

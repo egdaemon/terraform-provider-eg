@@ -80,6 +80,6 @@ resource "eg_repository_scheduled_workload" "default" {
 | `labels` | optional. labels a runner must have to run the workload. |
 | `secret_uris` | optional. references to the secrets made available to the workload, e.g. `gcpsm://project-id/secret-name`. the secrets are resolved by the runner. |
 | `description` | optional. |
-| `id`, `account_id`, `created_at`, `updated_at`, `lastrun_at`, `nextrun_at` | computed. |
+| `id`, `account_id`, `created_at` | computed. |
 
 adopt an existing schedule with `terraform import eg_repository_scheduled_workload.default <id>`.

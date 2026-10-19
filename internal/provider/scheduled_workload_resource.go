@@ -39,9 +39,6 @@ type ScheduledWorkloadResourceModel struct {
 	SecretURIs  []types.String       `tfsdk:"secret_uris"`
 	AccountID   types.String         `tfsdk:"account_id"`
 	CreatedAt   types.String         `tfsdk:"created_at"`
-	UpdatedAt   types.String         `tfsdk:"updated_at"`
-	LastrunAt   types.String         `tfsdk:"lastrun_at"`
-	NextrunAt   types.String         `tfsdk:"nextrun_at"`
 }
 
 // schedule converts the model into the control plane's representation.
@@ -79,7 +76,6 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err 
 		Id:          t.ID.ValueString(),
 		AccountId:   t.AccountID.ValueString(),
 		CreatedAt:   t.CreatedAt.ValueString(),
-		LastrunAt:   t.LastrunAt.ValueString(),
 		VcsUri:      t.Repository.ValueString(),
 		Entry:       t.Workload.ValueString(),
 		Cron:        t.Schedule.ValueString(),
@@ -101,9 +97,6 @@ func (t *ScheduledWorkloadResourceModel) refresh(s *schedules.Schedule) {
 	t.ID = types.StringValue(s.Id)
 	t.AccountID = types.StringValue(s.AccountId)
 	t.CreatedAt = types.StringValue(s.CreatedAt)
-	t.UpdatedAt = types.StringValue(s.UpdatedAt)
-	t.LastrunAt = types.StringValue(s.LastrunAt)
-	t.NextrunAt = types.StringValue(s.NextrunAt)
 	t.Repository = types.StringValue(s.VcsUri)
 	t.Workload = types.StringValue(s.Entry)
 	t.Schedule = types.StringValue(s.Cron)
@@ -242,20 +235,6 @@ func (r *ScheduledWorkloadResource) Schema(ctx context.Context, req resource.Sch
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
-			},
-			"updated_at": schema.StringAttribute{
-				Computed: true,
-			},
-			"lastrun_at": schema.StringAttribute{
-				MarkdownDescription: "when the workload last ran",
-				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-			"nextrun_at": schema.StringAttribute{
-				MarkdownDescription: "when the workload next runs",
-				Computed:            true,
 			},
 		},
 	}
