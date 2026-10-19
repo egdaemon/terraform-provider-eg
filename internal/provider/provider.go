@@ -35,8 +35,9 @@ type egt struct {
 	// testing.
 	version string
 
-	// client replaces building the eg api client from the ssh key, used by tests.
-	client func() (*http.Client, error)
+	// client replaces building the eg api client from the ssh key, used by tests. it receives the
+	// authorization endpoint the client is for.
+	client func(endpoint string) (*http.Client, error)
 }
 
 // providerModel is the provider block.
@@ -50,9 +51,13 @@ type providerModel struct {
 type providerData struct {
 	// account the account id configured on the provider, may be empty.
 	account string
-	// client the http client authorized for the eg api. the ssh key is not read, nor the client built,
-	// until the first call, and then only once.
-	client func() (*http.Client, error)
+	// meta the http client authorized for the account management routes (/m/), e.g. eg_gcp_identity_federation.
+	// the ssh key is not read, nor the client built, until the first call, and then only once.
+	meta func() (*http.Client, error)
+	// compute the http client authorized for the repository and compute routes (/r/, /c/), e.g.
+	// eg_repository_scheduled_workload. the routes check the compute authorization token, the meta token is
+	// rejected with a 401.
+	compute func() (*http.Client, error)
 }
 
 // Metadata returns the provider type name.
@@ -103,21 +108,22 @@ func (p *egt) Configure(ctx context.Context, req provider.ConfigureRequest, resp
 	}
 
 	if p.client != nil {
-		resp.ResourceData = &providerData{account: account, client: sync.OnceValues(p.client)}
+		resp.ResourceData = &providerData{
+			account: account,
+			meta:    sync.OnceValues(func() (*http.Client, error) { return p.client(authn.EndpointMetaAuthz()) }),
+			compute: sync.OnceValues(func() (*http.Client, error) { return p.client(authn.EndpointCompute()) }),
+		}
 		return
 	}
 
 	// the request context ends with the request, the client outlives it.
 	ctx = context.WithoutCancel(ctx)
-	resp.ResourceData = &providerData{account: account, client: sync.OnceValues(func() (*http.Client, error) {
+
+	// the key is read once and shared by the clients.
+	signer := sync.OnceValues(func() (ssh.Signer, error) {
 		keypath := config.SSHKeyPath.ValueString()
 		if keypath == "" {
 			keypath = cmdopts.DefaultSSHKeyPath()
-		}
-
-		insecure, _ := strconv.ParseBool(os.Getenv("EG_COMPUTE_TLS_INSECURE"))
-		if !config.Insecure.IsNull() {
-			insecure = config.Insecure.ValueBool()
 		}
 
 		encoded, err := os.ReadFile(keypath)
@@ -130,9 +136,30 @@ func (p *egt) Configure(ctx context.Context, req provider.ConfigureRequest, resp
 			return nil, fmt.Errorf("unable to parse the ssh key %s: %w", keypath, err)
 		}
 
-		// the management routes require the user management permission.
-		return authn.New(ctx, cmdopts.TLSConfig{Insecure: insecure}.DefaultClient(), signer, account, compute.NewAuthzTokenSource, authn.OptionEndpoint(authn.EndpointMetaAuthz())), nil
-	})}
+		return signer, nil
+	})
+
+	insecure, _ := strconv.ParseBool(os.Getenv("EG_COMPUTE_TLS_INSECURE"))
+	if !config.Insecure.IsNull() {
+		insecure = config.Insecure.ValueBool()
+	}
+
+	client := func(endpoint string) func() (*http.Client, error) {
+		return sync.OnceValues(func() (*http.Client, error) {
+			s, err := signer()
+			if err != nil {
+				return nil, err
+			}
+
+			return authn.New(ctx, cmdopts.TLSConfig{Insecure: insecure}.DefaultClient(), s, account, compute.NewAuthzTokenSource, authn.OptionEndpoint(endpoint)), nil
+		})
+	}
+
+	resp.ResourceData = &providerData{
+		account: account,
+		meta:    client(authn.EndpointMetaAuthz()),
+		compute: client(authn.EndpointCompute()),
+	}
 }
 
 // DataSources defines the data sources implemented in the provider.

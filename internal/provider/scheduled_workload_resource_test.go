@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egdaemon/eg/authn"
 	"github.com/egdaemon/eg/schedules"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -32,6 +33,8 @@ type fakeSchedules struct {
 	schedules map[string]*schedules.Schedule
 	updated   *schedules.Schedule
 	srv       *httptest.Server
+	// endpoints the authorization endpoints the provider asked a client for.
+	endpoints []string
 }
 
 func newFakeSchedules(t *testing.T) *fakeSchedules {
@@ -67,7 +70,11 @@ func newFakeSchedules(t *testing.T) *fakeSchedules {
 }
 
 // client the http client the provider is given in place of one built from the ssh key.
-func (t *fakeSchedules) client() (*http.Client, error) {
+func (t *fakeSchedules) client(endpoint string) (*http.Client, error) {
+	t.m.Lock()
+	t.endpoints = append(t.endpoints, endpoint)
+	t.m.Unlock()
+
 	dst, err := url.Parse(t.srv.URL)
 	if err != nil {
 		return nil, err
@@ -212,6 +219,26 @@ resource "eg_repository_scheduled_workload" "test" {
 				},
 			},
 		})
+	})
+
+	// the schedule routes check the compute authorization token (repository modify); the meta token is rejected
+	// with a 401.
+	t.Run("should authorize with the compute endpoint", func(t *testing.T) {
+		api := newFakeSchedules(t)
+
+		resource.UnitTest(t, resource.TestCase{
+			ProtoV6ProviderFactories: factories(api),
+			Steps: []resource.TestStep{
+				{Config: config("1d", "")},
+			},
+		})
+
+		api.m.Lock()
+		defer api.m.Unlock()
+		require.NotEmpty(t, api.endpoints)
+		for _, e := range api.endpoints {
+			require.Equal(t, authn.EndpointCompute(), e)
+		}
 	})
 
 	t.Run("should recreate a schedule removed out of band", func(t *testing.T) {

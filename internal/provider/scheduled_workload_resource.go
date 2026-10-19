@@ -290,7 +290,7 @@ func (r *ScheduledWorkloadResource) Create(ctx context.Context, req resource.Cre
 		return
 	}
 
-	if c, err = r.data.client(); err != nil {
+	if c, err = r.data.compute(); err != nil {
 		resp.Diagnostics.AddError("unable to authorize", err.Error())
 		return
 	}
@@ -322,7 +322,7 @@ func (r *ScheduledWorkloadResource) Read(ctx context.Context, req resource.ReadR
 		return
 	}
 
-	if c, err = r.data.client(); err != nil {
+	if c, err = r.data.compute(); err != nil {
 		resp.Diagnostics.AddError("unable to authorize", err.Error())
 		return
 	}
@@ -355,7 +355,7 @@ func (r *ScheduledWorkloadResource) Update(ctx context.Context, req resource.Upd
 		return
 	}
 
-	if c, err = r.data.client(); err != nil {
+	if c, err = r.data.compute(); err != nil {
 		resp.Diagnostics.AddError("unable to authorize", err.Error())
 		return
 	}
@@ -386,7 +386,7 @@ func (r *ScheduledWorkloadResource) Delete(ctx context.Context, req resource.Del
 		return
 	}
 
-	if c, err = r.data.client(); err != nil {
+	if c, err = r.data.compute(); err != nil {
 		resp.Diagnostics.AddError("unable to authorize", err.Error())
 		return
 	}

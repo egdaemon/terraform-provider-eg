@@ -1,14 +1,19 @@
 package provider
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/pem"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/egdaemon/eg/authn"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
@@ -16,6 +21,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/ssh"
 )
 
 // configureProvider runs the provider's Configure with account_id set to account-1 and the ssh key path, empty for unset.
@@ -103,44 +109,60 @@ resource "eg_gcp_identity_federation" "test" {
 }
 
 func TestProviderClient(t *testing.T) {
-	t.Run("should build the client once, and only when asked", func(t *testing.T) {
-		var calls atomic.Int32
-		data := configureProvider(t, &egt{version: "test", client: func() (*http.Client, error) {
-			calls.Add(1)
+	t.Run("should build each client once, only when asked, for its own endpoint", func(t *testing.T) {
+		var (
+			m         sync.Mutex
+			endpoints []string
+		)
+		data := configureProvider(t, &egt{version: "test", client: func(endpoint string) (*http.Client, error) {
+			m.Lock()
+			defer m.Unlock()
+			endpoints = append(endpoints, endpoint)
 			return &http.Client{}, nil
 		}}, "")
 
-		require.Zero(t, calls.Load(), "configure must not build the client")
+		require.Empty(t, endpoints, "configure must not build a client")
 		require.Equal(t, "account-1", data.account)
 
-		first, err := data.client()
+		first, err := data.meta()
 		require.NoError(t, err)
-		second, err := data.client()
+		second, err := data.meta()
 		require.NoError(t, err)
 		require.Same(t, first, second)
-		require.EqualValues(t, 1, calls.Load())
+		require.Equal(t, []string{authn.EndpointMetaAuthz()}, endpoints)
+
+		third, err := data.compute()
+		require.NoError(t, err)
+		fourth, err := data.compute()
+		require.NoError(t, err)
+		require.Same(t, third, fourth)
+		require.NotSame(t, first, third)
+		require.Equal(t, []string{authn.EndpointMetaAuthz(), authn.EndpointCompute()}, endpoints)
 	})
 
 	t.Run("should remember a failure rather than retrying", func(t *testing.T) {
 		var calls atomic.Int32
-		data := configureProvider(t, &egt{version: "test", client: func() (*http.Client, error) {
+		data := configureProvider(t, &egt{version: "test", client: func(string) (*http.Client, error) {
 			calls.Add(1)
 			return nil, errors.New("no key")
 		}}, "")
 
-		_, err := data.client()
+		_, err := data.meta()
 		require.ErrorContains(t, err, "no key")
-		_, err = data.client()
+		_, err = data.meta()
 		require.ErrorContains(t, err, "no key")
 		require.EqualValues(t, 1, calls.Load())
 	})
 
-	t.Run("should report a missing ssh key", func(t *testing.T) {
+	t.Run("should report a missing ssh key from either client", func(t *testing.T) {
 		data := configureProvider(t, New("test")().(*egt), filepath.Join(t.TempDir(), "eg"))
 
-		_, err := data.client()
+		_, err := data.meta()
 		require.ErrorContains(t, err, "unable to read the ssh key")
 		require.ErrorIs(t, err, os.ErrNotExist)
+
+		_, err = data.compute()
+		require.ErrorContains(t, err, "unable to read the ssh key")
 	})
 
 	t.Run("should report a malformed ssh key", func(t *testing.T) {
@@ -149,7 +171,27 @@ func TestProviderClient(t *testing.T) {
 
 		data := configureProvider(t, New("test")().(*egt), p)
 
-		_, err := data.client()
+		_, err := data.compute()
 		require.ErrorContains(t, err, "unable to parse the ssh key")
+	})
+
+	t.Run("should build both clients from a single valid ssh key", func(t *testing.T) {
+		_, priv, err := ed25519.GenerateKey(rand.Reader)
+		require.NoError(t, err)
+		block, err := ssh.MarshalPrivateKey(priv, "")
+		require.NoError(t, err)
+
+		p := filepath.Join(t.TempDir(), "eg")
+		require.NoError(t, os.WriteFile(p, pem.EncodeToMemory(block), 0600))
+
+		data := configureProvider(t, New("test")().(*egt), p)
+
+		m, err := data.meta()
+		require.NoError(t, err)
+		c, err := data.compute()
+		require.NoError(t, err)
+		require.NotNil(t, m)
+		require.NotNil(t, c)
+		require.NotSame(t, m, c)
 	})
 }

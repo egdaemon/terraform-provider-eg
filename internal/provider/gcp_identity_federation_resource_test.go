@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/egdaemon/eg/authn"
 	"github.com/egdaemon/eg/gcpwif"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
@@ -39,6 +40,8 @@ type fakeEG struct {
 	conns   map[string]*gcpwif.GCPWIFConnection
 	account string
 	srv     *httptest.Server
+	// endpoints the authorization endpoints the provider asked a client for.
+	endpoints []string
 }
 
 func newFakeEG(t *testing.T, account string) *fakeEG {
@@ -119,7 +122,11 @@ func newFakeEG(t *testing.T, account string) *fakeEG {
 }
 
 // client the http client the provider is given in place of one built from the ssh key.
-func (t *fakeEG) client() (*http.Client, error) {
+func (t *fakeEG) client(endpoint string) (*http.Client, error) {
+	t.m.Lock()
+	t.endpoints = append(t.endpoints, endpoint)
+	t.m.Unlock()
+
 	dst, err := url.Parse(t.srv.URL)
 	if err != nil {
 		return nil, err
@@ -211,6 +218,14 @@ func TestGCPIdentityFederationResource(t *testing.T) {
 		})
 
 		require.False(t, api.has("account-1"), "destroy should remove the connection")
+
+		// the account management routes check the meta authorization token.
+		api.m.Lock()
+		defer api.m.Unlock()
+		require.NotEmpty(t, api.endpoints)
+		for _, e := range api.endpoints {
+			require.Equal(t, authn.EndpointMetaAuthz(), e)
+		}
 	})
 
 	t.Run("should use an explicit label and replace the connection when it changes", func(t *testing.T) {

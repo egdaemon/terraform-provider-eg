@@ -108,7 +108,7 @@ func (r *GCPIdentityFederationResource) Create(ctx context.Context, req resource
 
 	// the label defaults to the account id. when the account is unknown here the api applies the default,
 	// but then an existing connection can't be detected before it is overwritten.
-	c, err := r.data.client()
+	c, err := r.data.meta()
 	if err != nil {
 		resp.Diagnostics.AddError("unable to authorize", err.Error())
 		return
@@ -154,7 +154,7 @@ func (r *GCPIdentityFederationResource) Read(ctx context.Context, req resource.R
 		return
 	}
 
-	c, err := r.data.client()
+	c, err := r.data.meta()
 	if err != nil {
 		resp.Diagnostics.AddError("unable to authorize", err.Error())
 		return
@@ -181,7 +181,7 @@ func (r *GCPIdentityFederationResource) Update(ctx context.Context, req resource
 		return
 	}
 
-	c, err := r.data.client()
+	c, err := r.data.meta()
 	if err != nil {
 		resp.Diagnostics.AddError("unable to authorize", err.Error())
 		return
@@ -210,7 +210,7 @@ func (r *GCPIdentityFederationResource) Delete(ctx context.Context, req resource
 		return
 	}
 
-	c, err := r.data.client()
+	c, err := r.data.meta()
 	if err != nil {
 		resp.Diagnostics.AddError("unable to authorize", err.Error())
 		return
