@@ -5,7 +5,6 @@ go 1.26.3
 require (
 	github.com/dustin/go-humanize v1.1.0
 	github.com/egdaemon/eg v0.0.0-20261019194830-76fe1be1f305
-	github.com/egdaemon/fron v0.0.0-20261016153721-ecdbb5b2656e
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-timetypes v0.5.0
 	github.com/hashicorp/terraform-plugin-go v0.31.0

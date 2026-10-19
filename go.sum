@@ -50,8 +50,6 @@ github.com/dustin/go-humanize v1.1.0 h1:dbKTrvD0klcbBV/h4AWJdMuZogJACoMlvWIWZ5b2
 github.com/dustin/go-humanize v1.1.0/go.mod h1:hc1CvRkJMsgxqjmjMQF3QNRAZBwY8AXBAzKYoSX9sFI=
 github.com/egdaemon/eg v0.0.0-20261019194830-76fe1be1f305 h1:ki0OW77gpHmyGMIzduoWDruLTJ8tclH6hXKnulAODhQ=
 github.com/egdaemon/eg v0.0.0-20261019194830-76fe1be1f305/go.mod h1:A63NavuUPFY0uzSLXz18waQH3U/mvDs9MjnTvRxkct0=
-github.com/egdaemon/fron v0.0.0-20261016153721-ecdbb5b2656e h1:g+VmdrUTuwqAKNI76Kg7jMB4oANrts3Bp/jxkvIaYGE=
-github.com/egdaemon/fron v0.0.0-20261016153721-ecdbb5b2656e/go.mod h1:RDBSv0faByJIwwfl37WbQmRy8oUZH73lO9btnYr+uqs=
 github.com/emirpasic/gods v1.18.1 h1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=
 github.com/emirpasic/gods v1.18.1/go.mod h1:8tpGGwCnJ5H4r6BWwaV6OrWmMoPhUl5jm/FMNAnJvWQ=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=

@@ -73,7 +73,7 @@ resource "eg_repository_scheduled_workload" "default" {
 |---|---|
 | `repository` | required. canonical vcs uri of the repository, e.g. `git@github.com:egdaemon/eg.git`. |
 | `workload` | required. workload module to run within the repository. |
-| `schedule` | required. [fron](https://github.com/egdaemon/fron) schedule, e.g. `1d`, `6h`, `1d @ on weekdays`. classic cron expressions are rejected, and pins (`@ 03:00`) are ignored: each schedule runs at a stable slot within its frequency. |
+| `schedule` | required. [fron](https://github.com/egdaemon/fron) schedule, e.g. `1d`, `6h`, `1d @ on weekdays`. pins (`@ 03:00`) are ignored: each schedule runs at a stable slot within its frequency. |
 | `timeout` | optional. maximum runtime as a duration like `30m` or `1h30m`, defaults to `1h`. |
 | `cpu`, `memory`, `vram` | optional. resources to make available, sizes like `1g` or `512MiB`. |
 | `arch`, `os` | optional. machine the workload runs on. |

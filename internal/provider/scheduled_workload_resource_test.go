@@ -234,21 +234,6 @@ resource "eg_repository_scheduled_workload" "test" {
 		})
 	})
 
-	t.Run("should reject a classic cron expression at plan time", func(t *testing.T) {
-		api := newFakeSchedules(t)
-
-		resource.UnitTest(t, resource.TestCase{
-			ProtoV6ProviderFactories: factories(api),
-			Steps: []resource.TestStep{
-				{
-					Config:      config("0 3 * * *", ""),
-					ExpectError: regexp.MustCompile("invalid fron schedule"),
-				},
-			},
-		})
-		require.Empty(t, api.schedules)
-	})
-
 	t.Run("should reject an invalid size at plan time", func(t *testing.T) {
 		resource.UnitTest(t, resource.TestCase{
 			ProtoV6ProviderFactories: factories(newFakeSchedules(t)),
@@ -497,24 +482,6 @@ func TestScheduledWorkloadResourceModelRefresh(t *testing.T) {
 	})
 }
 
-func TestScheduleparse(t *testing.T) {
-	t.Run("should accept fron schedules", func(t *testing.T) {
-		require.NoError(t, scheduleparse("1d"))
-		require.NoError(t, scheduleparse("6h"))
-		require.NoError(t, scheduleparse("1d @ on weekdays"))
-		require.NoError(t, scheduleparse("15m @ during 09:00-17:00 in America/New_York"))
-	})
-
-	t.Run("should reject classic cron expressions", func(t *testing.T) {
-		require.Error(t, scheduleparse("0 3 * * *"))
-	})
-
-	t.Run("should reject empty and malformed schedules", func(t *testing.T) {
-		require.Error(t, scheduleparse(""))
-		require.Error(t, scheduleparse("garbage"))
-	})
-}
-
 func TestBytesof(t *testing.T) {
 	t.Run("should parse human readable sizes", func(t *testing.T) {
 		n, err := bytesof(types.StringValue("512MiB"))
@@ -556,18 +523,18 @@ func TestSizeof(t *testing.T) {
 func TestParses(t *testing.T) {
 	validate := func(v types.String) *validator.StringResponse {
 		resp := &validator.StringResponse{}
-		parses{description: "invalid fron schedule", parse: scheduleparse}.ValidateString(context.Background(), validator.StringRequest{Path: path.Root("schedule"), ConfigValue: v}, resp)
+		parses{description: "invalid size", parse: sizeparse}.ValidateString(context.Background(), validator.StringRequest{Path: path.Root("size"), ConfigValue: v}, resp)
 		return resp
 	}
 
 	t.Run("should accept a value that parses", func(t *testing.T) {
-		require.False(t, validate(types.StringValue("1d")).Diagnostics.HasError())
+		require.False(t, validate(types.StringValue("1g")).Diagnostics.HasError())
 	})
 
 	t.Run("should reject a value that does not parse", func(t *testing.T) {
-		resp := validate(types.StringValue("0 3 * * *"))
+		resp := validate(types.StringValue("garbage"))
 		require.True(t, resp.Diagnostics.HasError())
-		require.Equal(t, "invalid fron schedule", resp.Diagnostics[0].Summary())
+		require.Equal(t, "invalid size", resp.Diagnostics[0].Summary())
 	})
 
 	t.Run("should skip null and unknown values", func(t *testing.T) {

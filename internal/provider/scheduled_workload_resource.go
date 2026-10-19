@@ -9,7 +9,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"github.com/egdaemon/eg/schedules"
-	"github.com/egdaemon/fron"
 	"github.com/hashicorp/terraform-plugin-framework-timetypes/timetypes"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -160,9 +159,6 @@ func (r *ScheduledWorkloadResource) Schema(ctx context.Context, req resource.Sch
 			"schedule": schema.StringAttribute{
 				MarkdownDescription: "[fron](https://github.com/egdaemon/fron) schedule to run the workload on, e.g. `1d`, `6h`, `1d @ on weekdays`. pins are ignored, each schedule runs at a stable slot within its frequency.",
 				Required:            true,
-				Validators: []validator.String{
-					parses{description: "invalid fron schedule", parse: scheduleparse},
-				},
 			},
 			"description": schema.StringAttribute{
 				MarkdownDescription: "human readable description of the scheduled workload",
@@ -417,12 +413,6 @@ func stringlist(prior []types.String, values []string) []types.String {
 	}
 
 	return l
-}
-
-// scheduleparse validates the schedule with the options the control plane computes the next run with.
-func scheduleparse(s string) (err error) {
-	_, err = fron.NextTick(time.Now(), s, fron.Options().IgnoreSeed().IgnorePin().InTz(time.UTC)...)
-	return err
 }
 
 func sizeparse(s string) (err error) {
