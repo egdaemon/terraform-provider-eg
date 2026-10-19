@@ -36,7 +36,7 @@ runs a repository's workload on a schedule. managing schedules requires the repo
 ```hcl
 resource "eg_repository_scheduled_workload" "default" {
   repository = "git@github.com:egdaemon/eg.git"
-  entry      = "tests/stress"
+  workload   = "tests/stress"
   cron       = "1d @ on weekdays"
   timeout    = "1h"
   memory     = "1g"
@@ -47,7 +47,7 @@ resource "eg_repository_scheduled_workload" "default" {
 | attribute | |
 |---|---|
 | `repository` | required. canonical vcs uri of the repository, e.g. `git@github.com:egdaemon/eg.git`. |
-| `entry` | required. workload module to run within the repository. |
+| `workload` | required. workload module to run within the repository. |
 | `cron` | required. [fron](https://github.com/egdaemon/fron) schedule, e.g. `1d`, `6h`, `1d @ on weekdays`. classic cron expressions are rejected, and pins (`@ 03:00`) are ignored: each schedule runs at a stable slot within its frequency. |
 | `timeout` | optional. maximum runtime, defaults to `1h`. |
 | `cpu`, `memory`, `vram` | optional. resources to make available, sizes like `1g` or `512MiB`. |

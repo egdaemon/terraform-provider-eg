@@ -23,7 +23,7 @@ import (
 type ScheduledWorkloadResourceModel struct {
 	ID          types.String   `tfsdk:"id"`
 	Repository  types.String   `tfsdk:"repository"`
-	Entry       types.String   `tfsdk:"entry"`
+	Workload    types.String   `tfsdk:"workload"`
 	Cron        types.String   `tfsdk:"cron"`
 	Description types.String   `tfsdk:"description"`
 	Timeout     types.String   `tfsdk:"timeout"`
@@ -71,7 +71,7 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err 
 		CreatedAt:   t.CreatedAt.ValueString(),
 		LastrunAt:   t.LastrunAt.ValueString(),
 		VcsUri:      t.Repository.ValueString(),
-		Entry:       t.Entry.ValueString(),
+		Entry:       t.Workload.ValueString(),
 		Cron:        t.Cron.ValueString(),
 		Description: t.Description.ValueString(),
 		Ttl:         uint64(ttl.Milliseconds()),
@@ -94,7 +94,7 @@ func (t *ScheduledWorkloadResourceModel) refresh(s *schedules.Schedule) {
 	t.LastrunAt = types.StringValue(s.LastrunAt)
 	t.NextrunAt = types.StringValue(s.NextrunAt)
 	t.Repository = types.StringValue(s.VcsUri)
-	t.Entry = types.StringValue(s.Entry)
+	t.Workload = types.StringValue(s.Entry)
 	t.Cron = types.StringValue(s.Cron)
 	t.Description = types.StringValue(s.Description)
 	t.Timeout = durationof(t.Timeout, time.Duration(s.Ttl)*time.Millisecond)
@@ -148,7 +148,7 @@ func (r *ScheduledWorkloadResource) Schema(ctx context.Context, req resource.Sch
 				MarkdownDescription: "canonical vcs uri of the repository, e.g. `git@github.com:egdaemon/eg.git`",
 				Required:            true,
 			},
-			"entry": schema.StringAttribute{
+			"workload": schema.StringAttribute{
 				MarkdownDescription: "workload module to run within the repository, e.g. `tests/stress`",
 				Required:            true,
 			},

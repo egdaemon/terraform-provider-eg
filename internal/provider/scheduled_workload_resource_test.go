@@ -105,7 +105,7 @@ func TestScheduledWorkloadResource(t *testing.T) {
 		return fmt.Sprintf(`
 resource "eg_repository_scheduled_workload" "test" {
   repository = "git@github.com:egdaemon/eg.git"
-  entry      = "tests/stress"
+  workload   = "tests/stress"
   cron       = %q
   memory     = "1g"
   cpu        = 8
@@ -129,6 +129,7 @@ resource "eg_repository_scheduled_workload" "test" {
 					Check: resource.ComposeAggregateTestCheckFunc(
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "id", "s1"),
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "account_id", "a1"),
+						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "workload", "tests/stress"),
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "cron", "1d"),
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "timeout", "1h"),
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "memory", "1g"),
@@ -138,6 +139,7 @@ resource "eg_repository_scheduled_workload" "test" {
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "labels.0", "gpu"),
 						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "nextrun_at", "2026-10-17T00:00:00Z"),
 						func(*terraform.State) error {
+							require.Equal(t, "tests/stress", api.get("s1").GetEntry())
 							require.Equal(t, uint64(time.Hour.Milliseconds()), api.get("s1").GetTtl())
 							require.Equal(t, uint64(1000000000), api.get("s1").GetMemory())
 							return nil

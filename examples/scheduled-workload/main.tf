@@ -13,7 +13,7 @@ provider "eg" {
 # run the repository's tests/stress workload every weekday.
 resource "eg_repository_scheduled_workload" "default" {
   repository = "git@github.com:egdaemon/eg.git"
-  entry      = "tests/stress"
+  workload   = "tests/stress"
   cron       = "1d @ on weekdays"
   timeout    = "1h"
   memory     = "1g"
