@@ -440,6 +440,37 @@ func TestScheduledWorkloadResourceModelSchedule(t *testing.T) {
 		require.Equal(t, "2026-10-15T00:00:00Z", s.CreatedAt)
 	})
 
+	// the control plane treats an omitted lastrun_at as never run and computes the next run from now,
+	// sending a zero timestamp instead put the next run in year 1.
+	t.Run("should omit the run timestamps from the request", func(t *testing.T) {
+		s, err := (&ScheduledWorkloadResourceModel{
+			ID:        types.StringValue("s1"),
+			AccountID: types.StringValue("a1"),
+			CreatedAt: types.StringValue("2026-10-15T00:00:00Z"),
+			Schedule:  types.StringValue("14d"),
+			Timeout:   timetypes.NewGoDurationValueFromStringMust("1h"),
+		}).schedule()
+		require.NoError(t, err)
+		require.Empty(t, s.LastrunAt)
+		require.Empty(t, s.NextrunAt)
+
+		for name, msg := range map[string]any{
+			"create": &schedules.ScheduleCreateRequest{Schedule: s},
+			"update": &schedules.ScheduleUpdateRequest{Schedule: s},
+		} {
+			encoded, err := json.Marshal(msg)
+			require.NoError(t, err, name)
+
+			var decoded struct {
+				Schedule map[string]any `json:"schedule"`
+			}
+			require.NoError(t, json.Unmarshal(encoded, &decoded), name)
+			require.NotEmpty(t, decoded.Schedule, name)
+			require.NotContains(t, decoded.Schedule, "lastrun_at", name)
+			require.NotContains(t, decoded.Schedule, "nextrun_at", name)
+		}
+	})
+
 	t.Run("should reject an invalid timeout", func(t *testing.T) {
 		_, err := (&ScheduledWorkloadResourceModel{Timeout: timetypes.GoDuration{StringValue: basetypes.NewStringValue("forever")}}).schedule()
 		require.Error(t, err)
