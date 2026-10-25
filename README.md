@@ -54,6 +54,42 @@ creating a connection fails if the label already exists, rather than overwriting
 
 when `account_id` is not configured the label is chosen by the api on create (the account id) and an existing connection can't be detected beforehand, set `account_id` or a `label` to get the check.
 
+### eg_aws_identity_federation
+
+registers an aws iam role with eg so workloads can assume it through web identity federation, see the aws access documentation for setting up the account. managing connections requires the user management permission. the aws side is managed with the aws provider's resources, this resource is only the connection.
+
+```hcl
+resource "eg_aws_identity_federation" "default" {
+  role_arn    = aws_iam_role.egdaemon.arn
+  region      = "us-east-2"
+  description = "my account"
+}
+```
+
+| attribute | |
+|---|---|
+| `role_arn` | required. the arn of the iam role workloads assume. |
+| `region` | optional. the default region of the workloads. |
+| `audience` | optional. the audience of the identity tokens, defaults to `sts.amazonaws.com`, it must match the client id of the iam identity provider. |
+| `description` | optional. |
+| `label` | optional. identifies the connection within the account, defaults to the account id. changing it replaces the connection. |
+| `id` | the label. |
+
+the behavior of the label and import is that of `eg_gcp_identity_federation`.
+
+### data.eg_aws_oidc
+
+the identity provider and subject the aws account trusts to accept the workloads of the eg account. requires the user management permission.
+
+```hcl
+data "eg_aws_oidc" "default" {}
+```
+
+| attribute | |
+|---|---|
+| `issuer_url` | the url of the issuer, the url of the `aws_iam_openid_connect_provider`. |
+| `subject` | the subject of the identity tokens of the account, pin it with the `sub` condition in the trust policy of the role. |
+
 ### eg_repository_scheduled_workload
 
 runs a repository's workload on a schedule. managing schedules requires the repository modify permission.

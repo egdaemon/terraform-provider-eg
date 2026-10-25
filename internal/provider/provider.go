@@ -113,6 +113,7 @@ func (p *egt) Configure(ctx context.Context, req provider.ConfigureRequest, resp
 			meta:    sync.OnceValues(func() (*http.Client, error) { return p.client(authn.EndpointMetaAuthz()) }),
 			compute: sync.OnceValues(func() (*http.Client, error) { return p.client(authn.EndpointCompute()) }),
 		}
+		resp.DataSourceData = resp.ResourceData
 		return
 	}
 
@@ -160,11 +161,14 @@ func (p *egt) Configure(ctx context.Context, req provider.ConfigureRequest, resp
 		meta:    client(authn.EndpointMetaAuthz()),
 		compute: client(authn.EndpointCompute()),
 	}
+	resp.DataSourceData = resp.ResourceData
 }
 
 // DataSources defines the data sources implemented in the provider.
 func (p *egt) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{}
+	return []func() datasource.DataSource{
+		NewAWSOIDCDataSource,
+	}
 }
 
 // Resources defines the resources implemented in the provider.
@@ -172,6 +176,7 @@ func (p *egt) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewTarResource,
 		NewGCPIdentityFederationResource,
+		NewAWSIdentityFederationResource,
 		NewScheduledWorkloadResource,
 	}
 }
