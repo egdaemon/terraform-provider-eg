@@ -20,6 +20,9 @@ provider "eg" {
   # also the default label of eg_gcp_identity_federation connections.
   account_id = "00000000-0000-0000-0000-000000000000"
 
+  # optional. required when the ssh key is associated with more than one profile in the account, defaults to $EG_PROFILE.
+  # profile_id = "00000000-0000-0000-0000-000000000000"
+
   # optional. path to the ssh private key, defaults to the eg cli's key.
   # ssh_key_path = "~/.config/eg/id_ed25519"
 

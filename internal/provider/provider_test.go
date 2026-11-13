@@ -24,7 +24,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// configureProvider runs the provider's Configure with account_id set to account-1 and the ssh key path, empty for unset.
+// configureProvider runs the provider's Configure with account_id set to account-1, profile_id set to profile-1 and the ssh key path, empty for unset.
 func configureProvider(t *testing.T, p *egt, sshkeypath string) *providerData {
 	t.Helper()
 
@@ -39,11 +39,13 @@ func configureProvider(t *testing.T, p *egt, sshkeypath string) *providerData {
 	raw := tftypes.NewValue(
 		tftypes.Object{AttributeTypes: map[string]tftypes.Type{
 			"account_id":   tftypes.String,
+			"profile_id":   tftypes.String,
 			"ssh_key_path": tftypes.String,
 			"insecure":     tftypes.Bool,
 		}},
 		map[string]tftypes.Value{
 			"account_id":   tftypes.NewValue(tftypes.String, "account-1"),
+			"profile_id":   tftypes.NewValue(tftypes.String, "profile-1"),
 			"ssh_key_path": key,
 			"insecure":     tftypes.NewValue(tftypes.Bool, nil),
 		},
@@ -123,6 +125,7 @@ func TestProviderClient(t *testing.T) {
 
 		require.Empty(t, endpoints, "configure must not build a client")
 		require.Equal(t, "account-1", data.account)
+		require.Equal(t, "profile-1", data.profile)
 
 		first, err := data.meta()
 		require.NoError(t, err)

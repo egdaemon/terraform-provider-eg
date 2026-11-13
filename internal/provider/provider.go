@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/egdaemon/eg"
 	"github.com/egdaemon/eg/authn"
 	"github.com/egdaemon/eg/cmd/cmdopts"
 	"github.com/egdaemon/eg/compute"
@@ -16,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/logging"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -43,6 +45,7 @@ type egt struct {
 // providerModel is the provider block.
 type providerModel struct {
 	AccountID  types.String `tfsdk:"account_id"`
+	ProfileID  types.String `tfsdk:"profile_id"`
 	SSHKeyPath types.String `tfsdk:"ssh_key_path"`
 	Insecure   types.Bool   `tfsdk:"insecure"`
 }
@@ -51,6 +54,8 @@ type providerModel struct {
 type providerData struct {
 	// account the account id configured on the provider, may be empty.
 	account string
+	// profile the profile id configured on the provider, may be empty.
+	profile string
 	// meta the http client authorized for the account management routes (/m/), e.g. eg_gcp_identity_federation.
 	// the ssh key is not read, nor the client built, until the first call, and then only once.
 	meta func() (*http.Client, error)
@@ -75,6 +80,10 @@ func (p *egt) Schema(ctx context.Context, _ provider.SchemaRequest, resp *provid
 				MarkdownDescription: "account to authorize as, required when the ssh key is associated with more than one profile. defaults to the `EG_ACCOUNT` environment variable. also the default label of `eg_gcp_identity_federation` connections.",
 				Optional:            true,
 			},
+			"profile_id": schema.StringAttribute{
+				MarkdownDescription: "profile to authorize as, required when the ssh key is associated with more than one profile in the account. defaults to the `EG_PROFILE` environment variable.",
+				Optional:            true,
+			},
 			"ssh_key_path": schema.StringAttribute{
 				MarkdownDescription: "path to the ssh private key registered with eg, the key must already exist. it is read when a resource first needs the eg api, not when the provider is configured. defaults to the eg cli's key.",
 				Optional:            true,
@@ -97,19 +106,25 @@ func (p *egt) Configure(ctx context.Context, req provider.ConfigureRequest, resp
 		return
 	}
 
-	if config.AccountID.IsUnknown() || config.SSHKeyPath.IsUnknown() || config.Insecure.IsUnknown() {
+	if config.AccountID.IsUnknown() || config.ProfileID.IsUnknown() || config.SSHKeyPath.IsUnknown() || config.Insecure.IsUnknown() {
 		resp.Diagnostics.AddError("unknown provider configuration", "provider attributes must be known at plan time")
 		return
 	}
 
 	account := config.AccountID.ValueString()
 	if account == "" {
-		account = os.Getenv("EG_ACCOUNT")
+		account = os.Getenv(eg.EnvAccount)
+	}
+
+	profile := config.ProfileID.ValueString()
+	if profile == "" {
+		profile = os.Getenv(eg.EnvProfile)
 	}
 
 	if p.client != nil {
 		resp.ResourceData = &providerData{
 			account: account,
+			profile: profile,
 			meta:    sync.OnceValues(func() (*http.Client, error) { return p.client(authn.EndpointMetaAuthz()) }),
 			compute: sync.OnceValues(func() (*http.Client, error) { return p.client(authn.EndpointCompute()) }),
 		}
@@ -151,12 +166,16 @@ func (p *egt) Configure(ctx context.Context, req provider.ConfigureRequest, resp
 				return nil, err
 			}
 
-			return authn.New(ctx, cmdopts.TLSConfig{Insecure: insecure}.DefaultClient(), s, account, compute.NewAuthzTokenSource, authn.OptionEndpoint(endpoint)), nil
+			base := cmdopts.TLSConfig{Insecure: insecure}.DefaultClient()
+			base.Transport = logging.NewLoggingHTTPTransport(base.Transport)
+
+			return authn.New(ctx, base, s, account, profile, compute.NewAuthzTokenSource, authn.OptionEndpoint(endpoint)), nil
 		})
 	}
 
 	resp.ResourceData = &providerData{
 		account: account,
+		profile: profile,
 		meta:    client(authn.EndpointMetaAuthz()),
 		compute: client(authn.EndpointCompute()),
 	}
