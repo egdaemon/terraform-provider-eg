@@ -2,17 +2,19 @@ module eg/compute
 
 go 1.27.2
 
-require github.com/egdaemon/eg v0.0.0-20261121012632-c4064e81d65d
+require github.com/egdaemon/eg v0.0.0-20261121152952-353d34cd05ae
 
 require (
 	github.com/KimMachineGun/automemlimit v1.0.1 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
+	github.com/ProtonMail/go-crypto v1.5.2 // indirect
+	github.com/cloudflare/circl v1.6.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dustin/go-humanize v1.1.0 // indirect
 	github.com/egdaemon/wasinet/wasinet v0.0.0-20261103201433-2f9a9bae892d // indirect
 	github.com/felixge/fgprof v0.9.5 // indirect
 	github.com/gofrs/uuid/v5 v5.5.1 // indirect
-	github.com/google/pprof v0.0.0-20261111200114-fac431ef4d26 // indirect
+	github.com/google/pprof v0.0.0-20261118010117-084b33a85f63 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -40,13 +42,14 @@ require (
 	github.com/zieckey/goini v0.0.0-20240615065340-08ee21c836fb // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/mod v0.43.0 // indirect
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.63.0 // indirect
 	golang.org/x/sync v0.25.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
-	golang.org/x/tools v0.52.0 // indirect
+	golang.org/x/tools v0.53.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
