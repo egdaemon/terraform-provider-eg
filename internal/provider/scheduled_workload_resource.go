@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
@@ -22,6 +23,9 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
+// notpaused is the control plane's paused_at for a schedule that is not paused, a time no clock reaches.
+const notpaused = "9999-12-31T23:59:59.999Z"
+
 // ScheduledWorkloadResourceModel describes the resource data model.
 type ScheduledWorkloadResourceModel struct {
 	ID          types.String         `tfsdk:"id"`
@@ -29,6 +33,7 @@ type ScheduledWorkloadResourceModel struct {
 	Workload    types.String         `tfsdk:"workload"`
 	Schedule    types.String         `tfsdk:"schedule"`
 	Description types.String         `tfsdk:"description"`
+	Paused      types.Bool           `tfsdk:"paused"`
 	Timeout     timetypes.GoDuration `tfsdk:"timeout"`
 	CPU         types.Int64          `tfsdk:"cpu"`
 	Memory      types.String         `tfsdk:"memory"`
@@ -72,6 +77,11 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err 
 		secrets = append(secrets, u.ValueString())
 	}
 
+	pausedat := notpaused
+	if t.Paused.ValueBool() {
+		pausedat = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+
 	return &schedules.Schedule{
 		Id:          t.ID.ValueString(),
 		AccountId:   t.AccountID.ValueString(),
@@ -80,6 +90,7 @@ func (t *ScheduledWorkloadResourceModel) schedule() (_ *schedules.Schedule, err 
 		Entry:       t.Workload.ValueString(),
 		Cron:        t.Schedule.ValueString(),
 		Description: t.Description.ValueString(),
+		PausedAt:    pausedat,
 		Ttl:         uint64(ttl),
 		Cores:       uint64(t.CPU.ValueInt64()),
 		Memory:      memory,
@@ -101,6 +112,7 @@ func (t *ScheduledWorkloadResourceModel) refresh(s *schedules.Schedule) {
 	t.Workload = types.StringValue(s.Entry)
 	t.Schedule = types.StringValue(s.Cron)
 	t.Description = types.StringValue(s.Description)
+	t.Paused = types.BoolValue(paused(s.PausedAt))
 	t.Timeout = timetypes.NewGoDurationValue(time.Duration(s.Ttl))
 	t.CPU = types.Int64Value(int64(s.Cores))
 	t.Memory = sizeof(t.Memory, s.Memory)
@@ -110,6 +122,12 @@ func (t *ScheduledWorkloadResourceModel) refresh(s *schedules.Schedule) {
 
 	t.Labels = stringlist(t.Labels, s.Labels)
 	t.SecretURIs = stringlist(t.SecretURIs, s.SecretUris)
+}
+
+// paused reports whether the control plane's paused_at has passed. unset or unparsable timestamps are not paused.
+func paused(at string) bool {
+	ts, err := time.Parse(time.RFC3339Nano, at)
+	return err == nil && !ts.After(time.Now())
 }
 
 var (
@@ -160,6 +178,12 @@ func (r *ScheduledWorkloadResource) Schema(ctx context.Context, req resource.Sch
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
 				},
+			},
+			"paused": schema.BoolAttribute{
+				MarkdownDescription: "whether the schedule is paused, a paused schedule remains registered but does not run. defaults to `false`",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
 			},
 			"timeout": schema.StringAttribute{
 				MarkdownDescription: "maximum runtime of the workload as a duration like `30m` or `1h30m`, defaults to `1h`",

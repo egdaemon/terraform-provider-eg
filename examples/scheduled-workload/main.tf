@@ -21,3 +21,11 @@ resource "eg_repository_scheduled_workload" "default" {
 
   secret_uris = ["gcpsm://my-project/stress-env"]
 }
+
+# registered but paused, remove `paused` (or set it to false) to resume it.
+resource "eg_repository_scheduled_workload" "paused" {
+  repository = "git@github.com:egdaemon/eg.git"
+  workload   = "tests/stress"
+  schedule   = "7d"
+  paused     = true
+}

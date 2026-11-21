@@ -258,6 +258,44 @@ resource "eg_repository_scheduled_workload" "test" {
 		})
 	})
 
+	t.Run("should pause and resume", func(t *testing.T) {
+		api := newFakeSchedules(t)
+
+		resource.UnitTest(t, resource.TestCase{
+			ProtoV6ProviderFactories: factories(api),
+			Steps: []resource.TestStep{
+				{
+					Config: config("1d", `paused = true`),
+					Check: resource.ComposeAggregateTestCheckFunc(
+						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "paused", "true"),
+						func(*terraform.State) error {
+							require.True(t, paused(api.get("s1").GetPausedAt()))
+							return nil
+						},
+					),
+				},
+				{
+					Config: config("1d", `paused = false`),
+					Check: resource.ComposeAggregateTestCheckFunc(
+						resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "paused", "false"),
+						func(*terraform.State) error {
+							require.Equal(t, "9999-12-31T23:59:59.999Z", api.get("s1").GetPausedAt())
+							return nil
+						},
+					),
+				},
+				{
+					Config: config("1d", ""),
+					Check:  resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "paused", "false"),
+				},
+				{
+					Config: config("1d", `paused = true`),
+					Check:  resource.TestCheckResourceAttr("eg_repository_scheduled_workload.test", "paused", "true"),
+				},
+			},
+		})
+	})
+
 	t.Run("should reject an invalid size at plan time", func(t *testing.T) {
 		resource.UnitTest(t, resource.TestCase{
 			ProtoV6ProviderFactories: factories(newFakeSchedules(t)),
@@ -471,6 +509,27 @@ func TestScheduledWorkloadResourceModelSchedule(t *testing.T) {
 		}
 	})
 
+	t.Run("should send a past paused_at when paused", func(t *testing.T) {
+		s, err := (&ScheduledWorkloadResourceModel{
+			Paused:   types.BoolValue(true),
+			Schedule: types.StringValue("14d"),
+			Timeout:  timetypes.NewGoDurationValueFromStringMust("1h"),
+		}).schedule()
+		require.NoError(t, err)
+		require.True(t, paused(s.PausedAt), "expected %q to be paused", s.PausedAt)
+	})
+
+	t.Run("should send an explicit infinite paused_at when not paused", func(t *testing.T) {
+		s, err := (&ScheduledWorkloadResourceModel{
+			Paused:   types.BoolValue(false),
+			Schedule: types.StringValue("14d"),
+			Timeout:  timetypes.NewGoDurationValueFromStringMust("1h"),
+		}).schedule()
+		require.NoError(t, err)
+		require.Equal(t, "9999-12-31T23:59:59.999Z", s.PausedAt)
+		require.False(t, paused(s.PausedAt))
+	})
+
 	t.Run("should reject an invalid timeout", func(t *testing.T) {
 		_, err := (&ScheduledWorkloadResourceModel{Timeout: timetypes.GoDuration{StringValue: basetypes.NewStringValue("forever")}}).schedule()
 		require.Error(t, err)
@@ -501,6 +560,21 @@ func TestScheduledWorkloadResourceModelRefresh(t *testing.T) {
 		m.refresh(&schedules.Schedule{Ttl: uint64(2 * time.Hour), Memory: 2 << 30})
 		require.Equal(t, "2h0m0s", m.Timeout.ValueString())
 		require.Equal(t, "2.0 GiB", m.Memory.ValueString())
+	})
+
+	t.Run("should report paused when paused_at has passed", func(t *testing.T) {
+		m := ScheduledWorkloadResourceModel{}
+		m.refresh(&schedules.Schedule{PausedAt: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)})
+		require.True(t, m.Paused.ValueBool())
+	})
+
+	t.Run("should report not paused for infinity and unset paused_at", func(t *testing.T) {
+		m := ScheduledWorkloadResourceModel{}
+		m.refresh(&schedules.Schedule{PausedAt: "9999-12-31T23:59:59.999Z"})
+		require.False(t, m.Paused.ValueBool())
+
+		m.refresh(&schedules.Schedule{})
+		require.False(t, m.Paused.ValueBool())
 	})
 
 	t.Run("should report secret uris", func(t *testing.T) {
