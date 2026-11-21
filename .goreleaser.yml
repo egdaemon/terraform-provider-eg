@@ -1,5 +1,7 @@
 # Visit https://goreleaser.com for documentation on how to customize this
 # behavior.
+# git tag v0.0.17 && git push --tags && GITHUB_TOKEN="$(gh auth token)" goreleaser release --clean
+# eg compute local --mount-read-only ~/.ssh:/home/egd/.ssh release
 version: 2
 builds:
   - env:

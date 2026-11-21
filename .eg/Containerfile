@@ -1,0 +1,18 @@
+FROM ubuntu:resolute
+ARG DEBIAN_FRONTEND=noninteractive
+ARG GOBIN=/usr/local/bin
+
+RUN apt-get update && apt-get -y install software-properties-common build-essential ca-certificates curl apt-transport-https sudo git gnupg gh dbus-user-session
+RUN add-apt-repository -n ppa:longsleep/golang-backports
+RUN add-apt-repository -n ppa:egdaemon/eg
+
+RUN apt-get update && apt-get -y install golang-1.27 egworkload
+RUN ln -s /usr/lib/go-1.27/bin/go /usr/local/bin/go
+
+RUN go install github.com/goreleaser/goreleaser/v2@v2.12.0
+RUN which goreleaser
+
+RUN ssh-keyscan -H github.com >> /etc/ssh/ssh_known_hosts
+RUN ssh-keyscan -H gitlab.com >> /etc/ssh/ssh_known_hosts
+
+CMD /usr/sbin/init
